@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            background: #000000;
+            color: #e8e8e8;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            overflow: hidden;
+        }
+
+        .app {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 14px;
+            background: #000000;
+        }
+
+        #status {
+            display: none;
+        }
+
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #000000;
+            z-index: 100;
+            gap: 20px;
+        }
+
+        .loading-screen.hidden {
+            display: none;
+        }
+
+        .loading-text {
+            font-size: 28px;
+            font-weight: 600;
+            color: #e5e5e5;
+            letter-spacing: 0.5px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #333333;
+            border-top-color: #e5e5e5;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .response-wrap {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 24px 10%;
+            background: #000000;
+            color: #ddd;
+            font-size: 15px;
+            line-height: 1.6;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            width: 100%;
+            margin-bottom: 24px;
+        }
+
+        .message .role {
+            display: none;
+        }
+
+        .message .content {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .message.user {
+            text-align: right;
+            color: #aaa;
+        }
+
+        .message.user .content {
+            display: block;
+            max-width: 850px;
+            margin-left: auto;
+            padding: 0;
+            background: transparent;
+            border-radius: 0;
+        }
+
+        .message.assistant {
+            color: #e5e5e5;
+            text-align: left;
+        }
+
+        .message.assistant .content {
+            display: block;
+            max-width: 850px;
+            padding: 0;
+            background: transparent;
+        }
+
+        .word {
+            display: inline-block;
+            opacity: 0;
+            transform: translateY(10px);
+            animation: wordFadeIn 0.35s ease-out forwards;
+        }
+
+        @keyframes wordFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .typing {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            width: 32px;
+            height: 24px;
+            padding: 0;
+            background: transparent;
+            border-radius: 0;
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #e5e5e5;
+            animation: dotPulse 0.9s ease-in-out infinite;
+        }
+
+        @keyframes dotPulse {
+            0%,
+            100% {
+                transform: scale(0.65);
+                opacity: 0.4;
+            }
+
+            50% {
+                transform: scale(1.5);
+                opacity: 1;
+            }
+        }
+
+        .input-row {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            max-width: 850px;
+            margin: 0 auto;
+            flex-shrink: 0;
+            padding: 10px 0;
+            position: relative;
+        }
+
+        .input-row input {
+            flex: 1;
+            min-width: 0;
+            height: 48px;
+            padding: 0 52px 0 20px;
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 9999px;
+            outline: none;
+            color: #eeeeee;
+            font-size: 14px;
+        }
+
+        .input-row input:focus {
+            border-color: #444444;
+        }
+
+        .input-row input::placeholder {
+            color: #555555;
+        }
+
+        .input-row button {
+            position: absolute;
+            right: 6px;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            background: #ffffff;
+            border: none;
+            border-radius: 50%;
+            color: #000000;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .input-row button:hover:not(:disabled) {
+            background: #e0e0e0;
+        }
+
+        .input-row button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .response-wrap::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .response-wrap::-webkit-scrollbar-track {
+            background: #000000;
+        }
+
+        .response-wrap::-webkit-scrollbar-thumb {
+            background: #222222;
+        }
+
+        @media (max-width: 700px) {
+            .app {
+                padding: 10px;
+            }
+
+            .response-wrap {
+                padding: 20px 4px;
+            }
+
+            .input-row {
+                padding: 8px 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div class="app">
+
+    <div id="loadingScreen" class="loading-screen">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="status"></div>
+
+    <div class="response-wrap" id="chatContainer"></div>
+
+    <div class="input-row">
+        <input
+            type="text"
+            id="userInput"
+            placeholder="Ask Qwen..."
+            disabled
+            autocomplete="off"
+            spellcheck="false"
+        >
+
+        <button id="askBtn" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 19V5"/>
+                <path d="M5 12l7-7 7 7"/>
+            </svg>
+        </button>
+    </div>
+
+</div>
+
+<script type="module">
+    import { CreateMLCEngine } from "https://esm.run/@mlc-ai/web-llm";
+
+    const chatContainer = document.getElementById("chatContainer");
+    const userInput = document.getElementById("userInput");
+    const askBtn = document.getElementById("askBtn");
+    const loadingScreen = document.getElementById("loadingScreen");
+
+    let engine;
+    let historique = [];
+
+    function estDangereux(question) {
+        const motsInterdits = [
+            "hack",
+            "virus",
+            "exploit",
+            "bypass",
+            "cheat",
+            "inject",
+            "kernel",
+            "driver",
+            "aimbot",
+            "wallhack",
+            "triggerbot",
+            "triche",
+            "fraude",
+            "copier",
+            "truquer",
+            "falsifier",
+            "bombe",
+            "explosif",
+            "cocaïne",
+            "héroïne",
+            "drogue",
+            "arme",
+            "fusil",
+            "couteau",
+            "poison",
+            "tuer",
+            "kill",
+            "murder",
+            "weapon",
+            "bomb",
+            "drugs",
+            "cocaine",
+            "heroin",
+            "gun",
+            "knife",
+            "poison"
+        ];
+
+        const q = question.toLowerCase();
+
+        return motsInterdits.some(
+            mot => q.includes(mot)
+        );
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function addMessage(role, content = "") {
+        const msgDiv = document.createElement("div");
+
+        msgDiv.className = `message ${role}`;
+
+        msgDiv.innerHTML = `
+            <div class="content">
+                ${escapeHtml(content)}
+            </div>
+        `;
+
+        chatContainer.appendChild(msgDiv);
+
+        chatContainer.scrollTop =
+            chatContainer.scrollHeight;
+
+        return msgDiv;
+    }
+
+    function addTypingMessage() {
+        const msgDiv =
+            document.createElement("div");
+
+        msgDiv.className =
+            "message assistant";
+
+        msgDiv.innerHTML = `
+            <div class="content">
+                <span class="typing">
+                    <span class="typing-dot"></span>
+                </span>
+            </div>
+        `;
+
+        chatContainer.appendChild(msgDiv);
+
+        chatContainer.scrollTop =
+            chatContainer.scrollHeight;
+
+        return msgDiv;
+    }
+
+    function typewrite(
+        text,
+        element,
+        speed = 35
+    ) {
+        return new Promise(resolve => {
+            element.innerHTML = "";
+
+            const parts =
+                text.split(/(\s+)/);
+
+            let delay = 0;
+            let wordCount = 0;
+
+            parts.forEach(part => {
+                if (/^\s+$/.test(part)) {
+                    element.appendChild(
+                        document.createTextNode(part)
+                    );
+
+                    return;
+                }
+
+                const span =
+                    document.createElement("span");
+
+                span.className = "word";
+                span.textContent = part;
+
+                span.style.animationDelay =
+                    `${delay}ms`;
+
+                element.appendChild(span);
+
+                delay += speed;
+                wordCount++;
+            });
+
+            const totalTime =
+                delay + 350;
+
+            setTimeout(
+                resolve,
+                totalTime
+            );
+        });
+    }
+
+    async function askQuestion() {
+        const prompt =
+            userInput.value.trim();
+
+        if (!prompt) {
+            return;
+        }
+
+        addMessage(
+            "user",
+            prompt
+        );
+
+        userInput.value = "";
+
+        userInput.disabled = true;
+        askBtn.disabled = true;
+
+        if (
+            estDangereux(prompt)
+        ) {
+            const msg =
+                addMessage(
+                    "assistant",
+                    ""
+                );
+
+            await typewrite(
+                "Sorry, I can't help with that.",
+                msg.querySelector(
+                    ".content"
+                )
+            );
+
+            userInput.disabled =
+                false;
+
+            askBtn.disabled =
+                false;
+
+            userInput.focus();
+
+            return;
+        }
+
+        if (
+            prompt
+                .toLowerCase()
+                .includes("time") ||
+            prompt
+                .toLowerCase()
+                .includes("clock")
+        ) {
+            const now =
+                new Date();
+
+            const h =
+                now.getHours()
+                    .toString()
+                    .padStart(2, "0");
+
+            const m =
+                now.getMinutes()
+                    .toString()
+                    .padStart(2, "0");
+
+            const msg =
+                addMessage(
+                    "assistant",
+                    ""
+                );
+
+            await typewrite(
+                `It's ${h}:${m}`,
+                msg.querySelector(
+                    ".content"
+                )
+            );
+
+            userInput.disabled =
+                false;
+
+            askBtn.disabled =
+                false;
+
+            userInput.focus();
+
+            return;
+        }
+
+        const typingMessage =
+            addTypingMessage();
+
+        try {
+            const messages = [
+                ...historique.slice(-4),
+                {
+                    role: "user",
+                    content: prompt
+                }
+            ];
+
+            const reply =
+                await engine.chat.completions.create(
+                    {
+                        messages: messages,
+                        max_tokens: 350,
+                        temperature: 0.3
+                    }
+                );
+
+            let text =
+                reply
+                    .choices[0]
+                    .message
+                    .content;
+
+            typingMessage.remove();
+
+            const msg =
+                addMessage(
+                    "assistant",
+                    ""
+                );
+
+            await typewrite(
+                text,
+                msg.querySelector(
+                    ".content"
+                )
+            );
+
+            historique.push({ role: "user", content: prompt });
+            historique.push({ role: "assistant", content: text });
+
+            if (historique.length > 4) {
+                historique = historique.slice(-4);
+            }
+
+        } catch (err) {
+            console.error(
+                "Error:",
+                err
+            );
+
+            typingMessage.remove();
+
+            const msg =
+                addMessage(
+                    "assistant",
+                    ""
+                );
+
+            await typewrite(
+                "Error",
+                msg.querySelector(
+                    ".content"
+                )
+            );
+        } finally {
+            userInput.disabled =
+                false;
+
+            askBtn.disabled =
+                false;
+
+            userInput.focus();
+        }
+    }
+
+    async function init() {
+        try {
+            engine =
+                await CreateMLCEngine(
+                    "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"
+                );
+
+            loadingScreen.classList.add("hidden");
+
+            userInput.disabled =
+                false;
+
+            askBtn.disabled =
+                false;
+
+            userInput.focus();
+        } catch (err) {
+            console.error(err);
+
+            loadingScreen.classList.add("hidden");
+
+            const msg =
+                addMessage(
+                    "assistant",
+                    ""
+                );
+
+            await typewrite(
+                "Unable to load Verity.",
+                msg.querySelector(
+                    ".content"
+                )
+            );
+        }
+    }
+
+    askBtn.addEventListener(
+        "click",
+        askQuestion
+    );
+
+    userInput.addEventListener(
+        "keydown",
+        e => {
+            if (
+                e.key === "Enter" &&
+                !askBtn.disabled
+            ) {
+                askQuestion();
+            }
+        }
+    );
+
+    init();
+</script>
+</body>
+</html>
